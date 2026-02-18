@@ -530,7 +530,7 @@ export default function SettingsPage() {
                             </span>
                         </div>
                         <div className="flex items-center justify-between">
-                            <span className="text-sm">Veritabanı (SQLite)</span>
+                            <span className="text-sm">Veritabanı (PostgreSQL)</span>
                             <span className="flex items-center gap-2 text-sm">
                                 <span className="h-2 w-2 rounded-full bg-green-500" />
                                 Aktif
