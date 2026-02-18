@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { Sparkles, Bell, User } from "lucide-react";
+import { Bell, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Tooltip,
@@ -26,9 +26,7 @@ export function TopBar() {
             <header className="fixed left-0 right-0 top-0 z-50 flex h-14 items-center border-b border-border bg-sidebar">
                 {/* Left: Logo */}
                 <div className="flex h-full w-16 shrink-0 items-center justify-center border-r border-border">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary">
-                        <Sparkles className="h-4 w-4 text-primary-foreground" />
-                    </div>
+                    <img src="/favicon64.png" alt="XFiles" className="h-8 w-8 rounded-lg" />
                 </div>
 
                 {/* Center: Title */}
