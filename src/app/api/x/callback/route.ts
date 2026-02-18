@@ -1,0 +1,117 @@
+import { NextResponse, NextRequest } from "next/server";
+import { TwitterApi } from "twitter-api-v2";
+import { cookies } from "next/headers";
+import prisma from "@/lib/prisma";
+
+// GET /api/x/callback — Handle OAuth 2.0 callback
+export async function GET(request: NextRequest) {
+    const searchParams = request.nextUrl.searchParams;
+    const code = searchParams.get("code");
+    const state = searchParams.get("state");
+    const error = searchParams.get("error");
+
+    // Handle user denial or errors
+    if (error) {
+        return NextResponse.redirect(
+            new URL("/settings?error=oauth_denied", request.url)
+        );
+    }
+
+    if (!code || !state) {
+        return NextResponse.redirect(
+            new URL("/settings?error=missing_params", request.url)
+        );
+    }
+
+    // Retrieve stored state and code verifier from cookies
+    const cookieStore = await cookies();
+    const storedState = cookieStore.get("x_oauth_state")?.value;
+    const codeVerifier = cookieStore.get("x_oauth_code_verifier")?.value;
+
+    // Clear OAuth cookies
+    cookieStore.delete("x_oauth_state");
+    cookieStore.delete("x_oauth_code_verifier");
+
+    if (!storedState || !codeVerifier || state !== storedState) {
+        return NextResponse.redirect(
+            new URL("/settings?error=state_mismatch", request.url)
+        );
+    }
+
+    const clientId = process.env.X_CLIENT_ID!;
+    const clientSecret = process.env.X_CLIENT_SECRET!;
+    const callbackUrl =
+        process.env.X_CALLBACK_URL || "http://localhost:3001/api/x/callback";
+
+    try {
+        const client = new TwitterApi({
+            clientId,
+            clientSecret,
+        });
+
+        // Exchange authorization code for tokens
+        const {
+            accessToken,
+            refreshToken,
+            expiresIn,
+        } = await client.loginWithOAuth2({
+            code,
+            codeVerifier,
+            redirectUri: callbackUrl,
+        });
+
+        if (!refreshToken) {
+            return NextResponse.redirect(
+                new URL("/settings?error=no_refresh_token", request.url)
+            );
+        }
+
+        // Use the access token to get user info
+        const loggedClient = new TwitterApi(accessToken);
+        const { data: me } = await loggedClient.v2.me({
+            "user.fields": ["profile_image_url", "name", "username"],
+        });
+
+        // Calculate token expiry
+        const tokenExpiresAt = expiresIn
+            ? new Date(Date.now() + expiresIn * 1000)
+            : null;
+
+        // Check if this is the first account (make it default)
+        const existingCount = await prisma.xAccount.count();
+
+        // Upsert the account
+        await prisma.xAccount.upsert({
+            where: { xUserId: me.id },
+            create: {
+                xUserId: me.id,
+                username: me.username,
+                displayName: me.name,
+                profileImage: me.profile_image_url || null,
+                accessToken,
+                refreshToken,
+                tokenExpiresAt,
+                scopes: "tweet.read tweet.write users.read offline.access",
+                isDefault: existingCount === 0,
+            },
+            update: {
+                username: me.username,
+                displayName: me.name,
+                profileImage: me.profile_image_url || null,
+                accessToken,
+                refreshToken,
+                tokenExpiresAt,
+                scopes: "tweet.read tweet.write users.read offline.access",
+            },
+        });
+
+        return NextResponse.redirect(
+            new URL("/settings?success=connected", request.url)
+        );
+    } catch (err) {
+        console.error("OAuth callback error:", err);
+        return NextResponse.redirect(
+            new URL("/settings?error=token_exchange_failed", request.url)
+        );
+    }
+}

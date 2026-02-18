@@ -1,0 +1,120 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// News Digest Feature Models
+model NewsSource {
+  id        String     @id @default(cuid())
+  name      String
+  url       String     // RSS feed URL
+  category  String     @default("genel") // teknoloji, siyaset, ekonomi, dünya, spor, yaşam
+  isActive  Boolean    @default(true)
+  createdAt DateTime   @default(now())
+  news      NewsItem[]
+}
+
+model NewsItem {
+  id          String     @id @default(cuid())
+  title       String
+  link        String
+  description String?
+  imageUrl    String?    // News article thumbnail from RSS
+  category    String?    // teknoloji, siyaset, ekonomi, dünya, spor, yaşam
+  publishedAt DateTime
+  sourceId    String
+  source      NewsSource @relation(fields: [sourceId], references: [id])
+  isSelected  Boolean    @default(false)
+  createdAt   DateTime   @default(now())
+}
+
+model NewsDigest {
+  id          String    @id @default(cuid())
+  content     String    // Generated tweet thread
+  scheduledAt DateTime?
+  postedAt    DateTime?
+  tweetUrl    String?   // URL of posted tweet/thread
+  status      String    @default("draft") // draft, scheduled, posted
+  createdAt   DateTime  @default(now())
+}
+
+// X (Twitter) OAuth 2.0 Connected Accounts
+model XAccount {
+  id             String    @id @default(cuid())
+  xUserId        String    @unique // X platform user ID
+  username       String             // @handle
+  displayName    String
+  profileImage   String?
+  accessToken    String             // OAuth 2.0 access token
+  refreshToken   String             // OAuth 2.0 refresh token
+  tokenExpiresAt DateTime?
+  scopes         String             // e.g. "tweet.read tweet.write users.read offline.access"
+  isDefault      Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  autopilotConfigs AutopilotConfig[]
+}
+
+// Autopilot Feature Models
+model AutopilotConfig {
+  id             String    @id @default(cuid())
+  name           String    @default("My Autopilot")
+  isActive       Boolean   @default(false)
+
+  // Tweet settings
+  categories     String    // Comma-separated: "teknoloji,ekonomi"
+  selectedSources String?  // Comma-separated source names: "NTV,T24,Webtekno"
+  format         String    @default("thread")    // thread | single
+  tone           String    @default("professional")
+  tweetCount     Int       @default(5)           // Tweets per thread (5-7 optimal)
+  charLimit      Int       @default(260)
+
+  // CTA
+  ctaEnabled     Boolean   @default(true)
+  ctaText        String?   // Custom CTA text
+
+  // Phoenix Algorithm Scheduling
+  tweetsPerDay   Int       @default(2)           // MAX 2 (algorithm hard limit)
+  timezone       String    @default("Europe/Istanbul")
+  preferredHours String?   // Comma-separated hours: "09,12,18,21"
+
+  // X account
+  xAccountId     String
+  xAccount       XAccount  @relation(fields: [xAccountId], references: [id])
+
+  // State tracking
+  lastPostAt     DateTime?                       // For 8-hour interval check
+  todayPostCount Int       @default(0)
+  lastResetDate  String?                         // YYYY-MM-DD for daily counter reset
+
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+}
+
+model AutopilotLog {
+  id          String   @id @default(cuid())
+  configId    String
+  action      String   // "fetch" | "summarize" | "hook_check" | "post" | "error" | "skipped"
+  details     String   // JSON details
+  tweetUrl    String?
+  createdAt   DateTime @default(now())
+}
+
+// AI Provider Configuration (multi-provider support)
+model AiConfig {
+  id        String   @id @default(cuid())
+  provider  String   // "gemini" | "openai" | "anthropic" | "kimi" | "minimax"
+  apiKey    String
+  model     String   // e.g. "gemini-2.5-flash", "gpt-4o", "moonshot-v1-8k"
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
