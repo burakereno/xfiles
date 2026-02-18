@@ -618,3 +618,26 @@ Kullanıcının kesinlikle durmasını sağlayacak bir giriş yaz.`;
         );
     }
 }
+
+// GET handler for cron triggers (Vercel Cron & Supabase pg_cron)
+export async function GET(request: NextRequest) {
+    // Verify authorization
+    const authHeader = request.headers.get("authorization");
+    const cronSecret = process.env.CRON_SECRET;
+
+    if (cronSecret && authHeader !== `Bearer ${cronSecret}`) {
+        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    // Delegate to POST handler with cron context
+    const syntheticRequest = new NextRequest(request.url, {
+        method: "POST",
+        headers: new Headers({
+            "content-type": "application/json",
+            "authorization": authHeader || "",
+        }),
+        body: JSON.stringify({}),
+    });
+
+    return POST(syntheticRequest);
+}
