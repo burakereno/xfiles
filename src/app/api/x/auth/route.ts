@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { TwitterApi } from "twitter-api-v2";
-import { cookies } from "next/headers";
 
 // GET /api/x/auth — Start OAuth 2.0 PKCE flow
 export async function GET() {
@@ -34,16 +33,17 @@ export async function GET() {
         }
     );
 
-    // Store codeVerifier and state in cookies for callback verification
-    const cookieStore = await cookies();
-    cookieStore.set("x_oauth_state", state, {
+    // Set cookies on the redirect response directly
+    // (cookies() API doesn't work with NextResponse.redirect in App Router)
+    const response = NextResponse.redirect(url);
+    response.cookies.set("x_oauth_state", state, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
         maxAge: 600, // 10 minutes
         path: "/",
     });
-    cookieStore.set("x_oauth_code_verifier", codeVerifier, {
+    response.cookies.set("x_oauth_code_verifier", codeVerifier, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "lax",
@@ -51,5 +51,5 @@ export async function GET() {
         path: "/",
     });
 
-    return NextResponse.redirect(url);
+    return response;
 }

@@ -143,6 +143,7 @@ export default function NewsDigestPage() {
     const [isFetching, setIsFetching] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
     const [selectedCategory, setSelectedCategory] = useState("tümü");
+    const [selectedSourceNames, setSelectedSourceNames] = useState<Set<string>>(new Set());
     const [isPosting, setIsPosting] = useState(false);
     const [postResult, setPostResult] = useState<{ success: boolean; threadUrl?: string; error?: string } | null>(null);
     const [showExamples, setShowExamples] = useState(false);
@@ -553,24 +554,40 @@ export default function NewsDigestPage() {
                                     }
                                     return acc;
                                 }, {} as Record<string, NewsSource>)
-                            ).map((source) => (
-                                <Card key={source.name} className="px-3 py-1.5">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-2">
-                                            <div
-                                                className={`h-2 w-2 rounded-full ${source.isActive ? "bg-green-500" : "bg-muted"
-                                                    }`}
-                                            />
-                                            <span className="text-sm font-medium">{source.name}</span>
+                            ).map((source) => {
+                                const isSourceSelected = selectedSourceNames.has(source.name);
+                                return (
+                                    <Card
+                                        key={source.name}
+                                        className={`cursor-pointer px-3 py-1.5 transition-colors ${isSourceSelected ? "border-primary/50 bg-primary/5" : "hover:bg-muted/50"}`}
+                                        onClick={() => {
+                                            setSelectedSourceNames(prev => {
+                                                const next = new Set(prev);
+                                                if (next.has(source.name)) {
+                                                    next.delete(source.name);
+                                                } else {
+                                                    next.add(source.name);
+                                                }
+                                                return next;
+                                            });
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <div
+                                                    className={`h-2 w-2 rounded-full ${isSourceSelected ? "bg-primary" : source.isActive ? "bg-green-500" : "bg-muted"}`}
+                                                />
+                                                <span className={`text-sm font-medium ${isSourceSelected ? "text-primary" : ""}`}>{source.name}</span>
+                                            </div>
+                                            {source.newsCount !== undefined && (
+                                                <Badge variant={isSourceSelected ? "default" : "secondary"} className="text-xs">
+                                                    {source.newsCount} haber
+                                                </Badge>
+                                            )}
                                         </div>
-                                        {source.newsCount !== undefined && (
-                                            <Badge variant="secondary" className="text-xs">
-                                                {source.newsCount} haber
-                                            </Badge>
-                                        )}
-                                    </div>
-                                </Card>
-                            ))
+                                    </Card>
+                                );
+                            })
                         ) : (
                             <div className="col-span-2 py-4 text-center text-sm text-muted-foreground">
                                 Kaynak bulunamadı. &quot;Haberleri Çek&quot; butonuna tıklayın.
@@ -635,6 +652,7 @@ export default function NewsDigestPage() {
                         {newsItems.length > 0 ? (
                             newsItems
                                 .filter((item) => selectedCategory === "tümü" || item.category === selectedCategory)
+                                .filter((item) => selectedSourceNames.size === 0 || selectedSourceNames.has(item.sourceName || ""))
                                 .map((item) => (
                                     <Card
                                         key={item.id}

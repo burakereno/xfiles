@@ -6,20 +6,20 @@ import { PROVIDER_MODELS, PROVIDER_LABELS } from "@/lib/ai-providers";
  * GET /api/ai-config — Return active AI config with masked API key
  */
 export async function GET() {
+    // Always return providers (static data) regardless of DB status
+    const providers = Object.entries(PROVIDER_LABELS).map(([id, label]) => ({
+        id,
+        label,
+        models: PROVIDER_MODELS[id] || [],
+    }));
+
     try {
         const config = await prisma.aiConfig.findFirst({
             where: { isActive: true },
         });
 
         if (!config) {
-            return NextResponse.json({
-                config: null,
-                providers: Object.entries(PROVIDER_LABELS).map(([id, label]) => ({
-                    id,
-                    label,
-                    models: PROVIDER_MODELS[id] || [],
-                })),
-            });
+            return NextResponse.json({ config: null, providers });
         }
 
         // Mask API key: show first 4 and last 4 chars
@@ -40,15 +40,12 @@ export async function GET() {
                 createdAt: config.createdAt.toISOString(),
                 updatedAt: config.updatedAt.toISOString(),
             },
-            providers: Object.entries(PROVIDER_LABELS).map(([id, label]) => ({
-                id,
-                label,
-                models: PROVIDER_MODELS[id] || [],
-            })),
+            providers,
         });
     } catch (error) {
         console.error("Failed to get AI config:", error);
-        return NextResponse.json({ error: "Failed to get AI config" }, { status: 500 });
+        // Still return providers so dropdowns work even if DB is down
+        return NextResponse.json({ config: null, providers });
     }
 }
 

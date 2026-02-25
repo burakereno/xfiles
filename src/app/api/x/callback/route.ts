@@ -49,6 +49,9 @@ export async function GET(request: NextRequest) {
             clientSecret,
         });
 
+        console.log("[X OAuth] Exchanging code for tokens...");
+        console.log("[X OAuth] callbackUrl:", callbackUrl);
+
         // Exchange authorization code for tokens
         const {
             accessToken,
@@ -60,17 +63,17 @@ export async function GET(request: NextRequest) {
             redirectUri: callbackUrl,
         });
 
-        if (!refreshToken) {
-            return NextResponse.redirect(
-                new URL("/settings?error=no_refresh_token", request.url)
-            );
-        }
+        console.log("[X OAuth] Token exchange successful");
+        console.log("[X OAuth] Has refreshToken:", !!refreshToken);
+        console.log("[X OAuth] expiresIn:", expiresIn);
 
         // Use the access token to get user info
         const loggedClient = new TwitterApi(accessToken);
         const { data: me } = await loggedClient.v2.me({
             "user.fields": ["profile_image_url", "name", "username"],
         });
+
+        console.log("[X OAuth] User info:", me.username, me.name, me.id);
 
         // Calculate token expiry
         const tokenExpiresAt = expiresIn
@@ -89,7 +92,7 @@ export async function GET(request: NextRequest) {
                 displayName: me.name,
                 profileImage: me.profile_image_url || null,
                 accessToken,
-                refreshToken,
+                refreshToken: refreshToken || "",
                 tokenExpiresAt,
                 scopes: "tweet.read tweet.write users.read offline.access",
                 isDefault: existingCount === 0,
@@ -99,19 +102,22 @@ export async function GET(request: NextRequest) {
                 displayName: me.name,
                 profileImage: me.profile_image_url || null,
                 accessToken,
-                refreshToken,
+                refreshToken: refreshToken || undefined,
                 tokenExpiresAt,
                 scopes: "tweet.read tweet.write users.read offline.access",
             },
         });
 
+        console.log("[X OAuth] Account saved successfully for @" + me.username);
+
         return NextResponse.redirect(
             new URL("/settings?success=connected", request.url)
         );
     } catch (err) {
-        console.error("OAuth callback error:", err);
+        console.error("[X OAuth] Callback error:", err);
+        const errorMessage = err instanceof Error ? err.message : "unknown";
         return NextResponse.redirect(
-            new URL("/settings?error=token_exchange_failed", request.url)
+            new URL(`/settings?error=token_exchange_failed&detail=${encodeURIComponent(errorMessage)}`, request.url)
         );
     }
 }
