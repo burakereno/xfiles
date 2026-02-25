@@ -1,5 +1,10 @@
 import { PrismaClient } from "@/generated/prisma";
 import { PrismaNeon } from "@prisma/adapter-neon";
+import { neonConfig } from "@neondatabase/serverless";
+import ws from "ws";
+
+// Enable WebSocket for @neondatabase/serverless in Node.js environment
+neonConfig.webSocketConstructor = ws;
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
@@ -13,8 +18,6 @@ function createPrismaClient() {
         ? process.env.DATABASE_URL!
         : (process.env.DIRECT_URL || process.env.DATABASE_URL!);
 
-    // @neondatabase/serverless works with both direct and pooler connections
-    // It handles TLS/SNI correctly for Supabase Supavisor
     const adapter = new PrismaNeon({ connectionString: connStr });
     return new PrismaClient({ adapter });
 }
