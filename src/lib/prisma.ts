@@ -39,7 +39,7 @@ function createPrismaClient() {
         pool = new Pool({ connectionString: connStr });
     }
 
-    const adapter = new PrismaPg({ pool });
+    const adapter = new PrismaPg(pool);
     return new PrismaClient({ adapter });
 }
 
