@@ -1,45 +1,21 @@
 import { PrismaClient } from "@/generated/prisma";
-import { PrismaPg } from "@prisma/adapter-pg";
-import { Pool } from "pg";
+import { PrismaNeon } from "@prisma/adapter-neon";
 
 const globalForPrisma = globalThis as unknown as {
     prisma: PrismaClient | undefined;
 };
 
 function createPrismaClient() {
-    // On Vercel (production): use DATABASE_URL (pooler) — direct URL doesn't work (IPv6 only)
-    // On local dev: use DIRECT_URL (direct connection) — pooler has pg v8 SNI issues
+    // On Vercel: use DATABASE_URL (pooler) — direct URL unreachable (IPv6 only)
+    // On local: use DIRECT_URL (direct) — faster and simpler
     const isVercel = !!process.env.VERCEL;
     const connStr = isVercel
         ? process.env.DATABASE_URL!
         : (process.env.DIRECT_URL || process.env.DATABASE_URL!);
 
-    // Parse the URL manually — pg v8's connection string parser
-    // breaks TLS SNI which Supabase Supavisor needs for tenant routing
-    const url = new URL(connStr.replace(/\?.*$/, "")); // Strip query params
-    const isPooler = url.hostname.includes("pooler.supabase.com");
-
-    let pool: Pool;
-
-    if (isPooler) {
-        // Supabase pooler: explicit params preserve TLS SNI for tenant routing
-        // ssl:true keeps SNI working (ssl:{rejectUnauthorized:false} breaks it in pg v8)
-        // NODE_TLS_REJECT_UNAUTHORIZED=0 must be set as env var to accept Supabase certs
-        pool = new Pool({
-            host: url.hostname,
-            port: parseInt(url.port) || 6543,
-            user: decodeURIComponent(url.username),
-            password: decodeURIComponent(url.password),
-            database: url.pathname.slice(1),
-            ssl: true,
-            max: 5,
-        });
-    } else {
-        // Direct connection (local dev) — works without special SSL
-        pool = new Pool({ connectionString: connStr });
-    }
-
-    const adapter = new PrismaPg(pool);
+    // @neondatabase/serverless works with both direct and pooler connections
+    // It handles TLS/SNI correctly for Supabase Supavisor
+    const adapter = new PrismaNeon({ connectionString: connStr });
     return new PrismaClient({ adapter });
 }
 
