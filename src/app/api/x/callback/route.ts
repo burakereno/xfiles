@@ -28,11 +28,21 @@ export async function GET(request: NextRequest) {
     const storedState = cookieStore.get("x_oauth_state")?.value;
     const codeVerifier = cookieStore.get("x_oauth_code_verifier")?.value;
 
+    console.log("[X OAuth Callback] Incoming state:", state);
+    console.log("[X OAuth Callback] Stored state from cookie:", storedState || "MISSING");
+    console.log("[X OAuth Callback] Code verifier from cookie:", codeVerifier ? "PRESENT" : "MISSING");
+    console.log("[X OAuth Callback] All cookies:", cookieStore.getAll().map(c => c.name));
+
     // Clear OAuth cookies
     cookieStore.delete("x_oauth_state");
     cookieStore.delete("x_oauth_code_verifier");
 
     if (!storedState || !codeVerifier || state !== storedState) {
+        console.error("[X OAuth Callback] State mismatch!", {
+            hasStoredState: !!storedState,
+            hasCodeVerifier: !!codeVerifier,
+            stateMatch: state === storedState,
+        });
         return NextResponse.redirect(
             new URL("/settings?error=state_mismatch", request.url)
         );
