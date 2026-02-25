@@ -7,7 +7,12 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-    const connStr = process.env.DIRECT_URL || process.env.DATABASE_URL!;
+    // On Vercel (production): use DATABASE_URL (pooler) — direct URL doesn't work (IPv6 only)
+    // On local dev: use DIRECT_URL (direct connection) — pooler has pg v8 SNI issues
+    const isVercel = !!process.env.VERCEL;
+    const connStr = isVercel
+        ? process.env.DATABASE_URL!
+        : (process.env.DIRECT_URL || process.env.DATABASE_URL!);
 
     // Parse the URL manually — pg v8's connection string parser
     // breaks TLS SNI which Supabase Supavisor needs for tenant routing
