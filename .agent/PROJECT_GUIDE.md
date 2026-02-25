@@ -36,17 +36,24 @@
 ### Prisma 7 + pg v8 + Supabase
 
 - Prisma 7'de `url`/`directUrl` schema'da **desteklenmiyor** — `prisma.config.ts` kullanılıyor.
-- `@prisma/adapter-pg` (pg v8) Supabase **pooler**'a bağlanamıyor (`Tenant or user not found` hatası — SNI/TLS uyumsuzluğu).
-- **Her zaman `DIRECT_URL` kullan** (`db.*.supabase.co:5432`).
-- `DATABASE_URL` (pooler, port 6543) sadece `prisma.config.ts`'de migration'lar için kullanılır.
+- `@prisma/adapter-pg` (pg v8) Supabase **pooler**'a bağlanırken SNI/TLS uyumsuzluğu var.
+- **Vercel direct DB'ye ulaşamıyor** (Supabase sadece IPv6, Vercel IPv6 desteklemiyor).
+- **Local'de `DIRECT_URL` kullan** (`db.*.supabase.co:5432`).
+- **Vercel'de `DATABASE_URL` (pooler) kullan** + `NODE_TLS_REJECT_UNAUTHORIZED=0` env var.
+- `prisma.ts` otomatik algılıyor: pooler ise explicit Pool params + `ssl: true`, direct ise connection string.
+
+### Vercel'de DIRECT_URL Kullanma!
+
+> 🔴 **ASLA Vercel env var'larına `DIRECT_URL` ekleme!**
+> Vercel serverless fonksiyonları IPv6 desteklemiyor. Direct DB sadece local dev için kullanılabilir.
 
 ### Bağlantı String'leri
 
 ```
-# DIRECT_URL — pg adapter için (runtime bağlantı)
+# DIRECT_URL — LOCAL dev için (pg adapter runtime bağlantı)
 postgresql://postgres:PASSWORD@db.dbvzpashkaoubgzhmvyz.supabase.co:5432/postgres
 
-# DATABASE_URL — pooler (migration'lar için, runtime'da KULLANMA)
+# DATABASE_URL — VERCEL (pooler, NODE_TLS_REJECT_UNAUTHORIZED=0 gerektirir)
 postgresql://postgres.dbvzpashkaoubgzhmvyz:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?pgbouncer=true
 ```
 
