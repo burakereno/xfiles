@@ -20,8 +20,9 @@ export async function GET() {
         return NextResponse.json({ accounts });
     } catch (error) {
         console.error("Failed to list accounts:", error);
+        const detail = error instanceof Error ? error.message : String(error);
         return NextResponse.json(
-            { error: "Failed to list accounts" },
+            { error: "Failed to list accounts", detail },
             { status: 500 }
         );
     }
