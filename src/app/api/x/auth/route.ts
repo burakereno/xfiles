@@ -51,8 +51,9 @@ export async function GET() {
         });
     } catch (error) {
         console.error("[X OAuth] Failed to store state:", error);
+        const detail = error instanceof Error ? error.message : String(error);
         return NextResponse.json(
-            { error: "Failed to initiate OAuth flow" },
+            { error: "Failed to initiate OAuth flow", detail },
             { status: 500 }
         );
     }
