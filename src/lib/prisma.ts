@@ -6,7 +6,8 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-    // Use DIRECT_URL for pg adapter (pgbouncer URL causes "Tenant or user not found")
+    // DIRECT_URL works with pg driver (direct PostgreSQL connection)
+    // DATABASE_URL (Supabase pooler) has SNI/TLS issues with pg v8
     const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL!;
     const adapter = new PrismaPg({ connectionString });
     return new PrismaClient({ adapter });
