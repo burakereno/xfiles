@@ -6,7 +6,8 @@ const globalForPrisma = globalThis as unknown as {
 };
 
 function createPrismaClient() {
-    const connectionString = process.env.DATABASE_URL!;
+    // Use DIRECT_URL for pg adapter (pgbouncer URL causes "Tenant or user not found")
+    const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL!;
     const adapter = new PrismaPg({ connectionString });
     return new PrismaClient({ adapter });
 }
