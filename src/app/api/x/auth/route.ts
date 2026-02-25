@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { TwitterApi } from "twitter-api-v2";
+import prisma from "@/lib/prisma";
 
 // GET /api/x/auth — Start OAuth 2.0 PKCE flow
 export async function GET() {
@@ -33,23 +34,28 @@ export async function GET() {
         }
     );
 
-    // Set cookies on the redirect response directly
-    // (cookies() API doesn't work with NextResponse.redirect in App Router)
-    const response = NextResponse.redirect(url);
-    response.cookies.set("x_oauth_state", state, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 600, // 10 minutes
-        path: "/",
-    });
-    response.cookies.set("x_oauth_code_verifier", codeVerifier, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 600,
-        path: "/",
-    });
+    // Store state and codeVerifier in database (not cookies)
+    // This survives cross-domain redirects (localhost → production)
+    try {
+        // Clean up expired states first
+        await prisma.oAuthState.deleteMany({
+            where: { expiresAt: { lt: new Date() } },
+        });
 
-    return response;
+        await prisma.oAuthState.create({
+            data: {
+                state,
+                codeVerifier,
+                expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+            },
+        });
+    } catch (error) {
+        console.error("[X OAuth] Failed to store state:", error);
+        return NextResponse.json(
+            { error: "Failed to initiate OAuth flow" },
+            { status: 500 }
+        );
+    }
+
+    return NextResponse.redirect(url);
 }

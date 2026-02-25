@@ -118,3 +118,11 @@ model AiConfig {
   updatedAt DateTime @updatedAt
 }
 
+// OAuth State Storage (replaces cookies for cross-domain compatibility)
+model OAuthState {
+  id           String   @id @default(cuid())
+  state        String   @unique  // OAuth state parameter
+  codeVerifier String             // PKCE code verifier
+  expiresAt    DateTime           // Auto-cleanup after expiry
+  createdAt    DateTime @default(now())
+}

@@ -1,6 +1,5 @@
 import { NextResponse, NextRequest } from "next/server";
 import { TwitterApi } from "twitter-api-v2";
-import { cookies } from "next/headers";
 import prisma from "@/lib/prisma";
 
 // GET /api/x/callback — Handle OAuth 2.0 callback
@@ -23,30 +22,36 @@ export async function GET(request: NextRequest) {
         );
     }
 
-    // Retrieve stored state and code verifier from cookies
-    const cookieStore = await cookies();
-    const storedState = cookieStore.get("x_oauth_state")?.value;
-    const codeVerifier = cookieStore.get("x_oauth_code_verifier")?.value;
-
-    console.log("[X OAuth Callback] Incoming state:", state);
-    console.log("[X OAuth Callback] Stored state from cookie:", storedState || "MISSING");
-    console.log("[X OAuth Callback] Code verifier from cookie:", codeVerifier ? "PRESENT" : "MISSING");
-    console.log("[X OAuth Callback] All cookies:", cookieStore.getAll().map(c => c.name));
-
-    // Clear OAuth cookies
-    cookieStore.delete("x_oauth_state");
-    cookieStore.delete("x_oauth_code_verifier");
-
-    if (!storedState || !codeVerifier || state !== storedState) {
-        console.error("[X OAuth Callback] State mismatch!", {
-            hasStoredState: !!storedState,
-            hasCodeVerifier: !!codeVerifier,
-            stateMatch: state === storedState,
+    // Retrieve stored state from database (not cookies)
+    let oauthState;
+    try {
+        oauthState = await prisma.oAuthState.findUnique({
+            where: { state },
         });
+    } catch (err) {
+        console.error("[X OAuth Callback] DB lookup failed:", err);
+    }
+
+    if (!oauthState) {
+        console.error("[X OAuth Callback] State not found in DB:", state);
         return NextResponse.redirect(
             new URL("/settings?error=state_mismatch", request.url)
         );
     }
+
+    // Check expiry
+    if (oauthState.expiresAt < new Date()) {
+        console.error("[X OAuth Callback] State expired");
+        await prisma.oAuthState.delete({ where: { id: oauthState.id } }).catch(() => { });
+        return NextResponse.redirect(
+            new URL("/settings?error=state_expired", request.url)
+        );
+    }
+
+    const codeVerifier = oauthState.codeVerifier;
+
+    // Clean up the used state
+    await prisma.oAuthState.delete({ where: { id: oauthState.id } }).catch(() => { });
 
     const clientId = process.env.X_CLIENT_ID!;
     const clientSecret = process.env.X_CLIENT_SECRET!;
@@ -60,7 +65,6 @@ export async function GET(request: NextRequest) {
         });
 
         console.log("[X OAuth] Exchanging code for tokens...");
-        console.log("[X OAuth] callbackUrl:", callbackUrl);
 
         // Exchange authorization code for tokens
         const {
@@ -74,8 +78,6 @@ export async function GET(request: NextRequest) {
         });
 
         console.log("[X OAuth] Token exchange successful");
-        console.log("[X OAuth] Has refreshToken:", !!refreshToken);
-        console.log("[X OAuth] expiresIn:", expiresIn);
 
         // Use the access token to get user info
         const loggedClient = new TwitterApi(accessToken);
