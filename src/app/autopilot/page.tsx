@@ -37,12 +37,15 @@ interface AutopilotConfig {
     id: string;
     name: string;
     isActive: boolean;
+    paused: boolean;
     categories: string;
     selectedSources: string | null;
     format: string;
     tone: string;
     tweetCount: number;
     charLimit: number;
+    hashtagCount: number;
+    customPrompt: string | null;
     tweetsPerDay: number;
     timezone: string;
     preferredHours: string | null;
@@ -74,29 +77,12 @@ interface XAccountSummary {
     isDefault: boolean;
 }
 
-type DemoStepId = "idle" | "fetch" | "summarize" | "hook_check" | "post" | "done";
-
-interface DemoStep {
-    id: DemoStepId;
-    label: string;
-    description: string;
-    icon: React.ElementType;
-    duration: number;
-}
-
 interface InstanceState {
     configId: string;
     xAccountId: string;
     username: string;
     isActive: boolean;
     paused: boolean;
-    demoStepIndex: number;
-    demoProgress: number;
-    demoFetchedCount: number;
-    demoHookScore: number;
-    demoGeneratedTweets: string[];
-    demoRunning: boolean;
-    // Config summary
     configCategories: string[];
     configTone: string;
     configTweetCount: number;
@@ -105,24 +91,9 @@ interface InstanceState {
     configTweetsPerDay: number;
     configLength: string;
     configHashtagCount: number;
+    lastPostAt?: string | null;
+    todayPostCount?: number;
 }
-
-// Constants
-const DEMO_STEPS: DemoStep[] = [
-    { id: "fetch", label: "Haberler Çekiliyor", description: "RSS kaynaklarından güncel haberler alınıyor...", icon: Rss, duration: 2000 },
-    { id: "summarize", label: "AI Özet Oluşturuluyor", description: "Seçili haberlerden tweet thread'i hazırlanıyor...", icon: Sparkles, duration: 3000 },
-    { id: "hook_check", label: "Hook Kalitesi Kontrolü", description: "Phoenix Algoritması ile hook skoru hesaplanıyor...", icon: Shield, duration: 1500 },
-    { id: "post", label: "X'e Paylaşılıyor", description: "Thread X hesabınızda yayınlanıyor...", icon: Send, duration: 2000 },
-    { id: "done", label: "Tamamlandı", description: "Thread başarıyla paylaşıldı!", icon: CheckCircle2, duration: 0 },
-];
-
-const FAKE_TWEETS = [
-    "🚀 Yapay zeka sektöründe dev adım: Google DeepMind, yeni nesil çok modlu modeli Gemini 3.0'ı duyurdu.\n\nModel, önceki versiyona kıyasla 3 kat daha hızlı çıkarım yapabiliyor.",
-    "💡 En dikkat çekici özellikler:\n\n• Gerçek zamanlı video anlama\n• 50+ dilde native destek\n• Kod üretiminde %40 doğruluk artışı",
-    "📊 Benchmark sonuçları etkileyici:\n\nMMLU: 92.1%\nHumanEval: 89.7%\nGSM8K: 96.2%",
-    "🏢 Google Cloud müşterileri modele anında erişebilecek. Enterprise API fiyatlandırması %30 daha uygun.",
-    "🔮 AI demokratikleşmeye devam ediyor. Daha güçlü modeller herkesin erişimine açılıyor.\n\n🔔 Takip et, günlük özet kaçırma!",
-];
 
 const CATEGORIES = [
     { id: "teknoloji", label: "Teknoloji", icon: "💻" },
@@ -247,12 +218,53 @@ export default function AutopilotPage() {
 
     const [ctaEnabled, setCtaEnabled] = useState(true);
     const [ctaText, setCtaText] = useState("🔔 Takip et, günlük özet kaçırma!");
+
+    const DEFAULT_PROMPT = `PERSONA: Sen Türkiye'nin en çok takip edilen teknoloji/gündem içerik üreticisisin. Tonun bilgili ama samimi — bir arkadaşın sana önemli haberleri anlatıyormuş gibi. Haber ajansı spikeri gibi DEĞİL.
+
+HEDEF KİTLE: Teknoloji ve gündem takip eden, 25-40 yaş, profesyonel Türk X kullanıcıları.
+
+HOOK (İLK CÜMLE — THREAD'İN KADERİNİ BELİRLER):
+Kullanıcı feed'de kaydırırken 3 saniyede karar verir. İlk cümle MUTLAKA şu tekniklerden birini kullansın:
+• Şaşırtıcı rakam: "Türkiye'de her 3 kişiden 1'i bunu bilmiyor"
+• Merak boşluğu: "Herkes yapay zekayı konuşuyor ama kimse şunu sormuyor"
+• Aciliyet: "Son 24 saatte teknoloji dünyasında 3 büyük kırılma yaşandı"
+• Liste daveti: "Bugün 5 kritik gelişme var, 3.'sü herkesi etkileyecek 👇"
+• Kontrast: "Apple bunu yaparken, Samsung tam tersini yaptı"
+
+✅ İYİ HOOK: "Türkiye'nin internet hızı dünya sıralamasında 15 basamak düştü — sebebi çoğu kişinin tahmin edemeyeceği bir şey"
+❌ KÖTÜ HOOK: "Bugünkü gündem özetimize hoş geldiniz! İşte günün önemli haberleri"
+
+THREAD AKIŞI:
+1. İLK TWEET: Dikkat çekici hook + haberlerin tek satırlık başlıkları
+2. ORTA TWEETLER: Her biri TEK bir haberi özetlesin — en ilginç detayı öne çıkar
+3. SON TWEET: Hashtag + takipçiyi konuşmaya davet eden soru ("Siz ne düşünüyorsunuz?" veya "En çok hangisi dikkatinizi çekti?")
+
+YAPMA:
+• Tweet numarası KOYMA (1/, 2/ gibi)
+• "Bu yazıda şunları bulacaksınız" gibi klişelerle başlama
+• NTV/CNN haber bülteni gibi resmi yazma
+• Provokatif, troll veya kutuplaştırıcı ifade kullanma
+
+YAP:
+• Her tweet sonunda ilgili emoji kullan
+• Paylaşılabilir insight ver (okuyucu RT yapmak istesin)
+• Niche tutarlılığını koru — sadece seçilen kategorilerle ilgili yaz
+• Tweetleri --- (üç tire) ile ayır
+
+HABERLER:
+{{NEWS}}
+
+Sadece thread metnini döndür, başka açıklama ekleme. Tweetleri --- ile ayır.`;
+
+    const [customPrompt, setCustomPrompt] = useState("");
+    const [showPromptEditor, setShowPromptEditor] = useState(false);
     const [showTimezoneDropdown, setShowTimezoneDropdown] = useState(false);
     const timezoneDropdownRef = useRef<HTMLDivElement>(null);
+    const [isManualTesting, setIsManualTesting] = useState(false);
+    const [manualTestResult, setManualTestResult] = useState<{ success: boolean; message: string; threadUrl?: string } | null>(null);
 
-    // Active instances (running pipelines)
+    // Active instances
     const [instances, setInstances] = useState<Map<string, InstanceState>>(new Map());
-    const instanceRefs = useRef<Map<string, { hookScore: number }>>(new Map());
 
     const charLimit = length === "short" ? 180 : length === "medium" ? 220 : 250;
 
@@ -322,13 +334,11 @@ export default function AutopilotPage() {
                 // Initialize active instances from loaded configs
                 const newInstances = new Map<string, InstanceState>();
                 (data.configs || []).forEach((c: AutopilotConfig) => {
-                    if (c.isActive) {
+                    if (c.isActive || c.paused) {
                         newInstances.set(c.xAccountId, {
                             configId: c.id, xAccountId: c.xAccountId,
                             username: c.xAccount?.username || "unknown",
-                            isActive: true, paused: false, demoStepIndex: -1, demoProgress: 0,
-                            demoFetchedCount: 0, demoHookScore: 0,
-                            demoGeneratedTweets: [], demoRunning: false,
+                            isActive: c.isActive, paused: c.paused ?? false,
                             configCategories: c.categories ? c.categories.split(",").map(s => s.trim()) : [],
                             configTone: c.tone || "professional",
                             configTweetCount: c.tweetCount || 5,
@@ -336,7 +346,9 @@ export default function AutopilotPage() {
                             configTimezone: c.timezone || "Europe/Istanbul",
                             configTweetsPerDay: c.tweetsPerDay || 2,
                             configLength: c.charLimit <= 180 ? "short" : c.charLimit <= 220 ? "medium" : "long",
-                            configHashtagCount: 2,
+                            configHashtagCount: c.hashtagCount ?? 2,
+                            lastPostAt: c.lastPostAt,
+                            todayPostCount: c.todayPostCount ?? 0,
                         });
                     }
                 });
@@ -369,6 +381,7 @@ export default function AutopilotPage() {
             if (cfg.timezone) setTimezone(cfg.timezone);
             setCtaEnabled(cfg.ctaEnabled ?? true);
             setCtaText(cfg.ctaText || "🔔 Takip et, günlük özet kaçırma!");
+            setCustomPrompt(cfg.customPrompt || "");
         } else {
             // Reset to defaults for new account
             setSelectedCategories(["teknoloji"]);
@@ -377,6 +390,7 @@ export default function AutopilotPage() {
             setSelectedSources(ALL_SOURCE_NAMES);
             setTimezone("Europe/Istanbul");
             setCtaEnabled(true); setCtaText("🔔 Takip et, günlük özet kaçırma!");
+            setCustomPrompt("");
         }
     }, [selectedAccountId, configs]);
 
@@ -395,9 +409,11 @@ export default function AutopilotPage() {
                     selectedSources: selectedSources.join(","),
                     format: parseInt(tweetCount) === 1 ? "single" : "thread",
                     tone, tweetCount: parseInt(tweetCount), charLimit,
+                    hashtagCount: parseInt(hashtagCount),
                     tweetsPerDay: parseInt(tweetsPerDay),
                     timezone,
                     ctaEnabled, ctaText, xAccountId: selectedAccountId,
+                    customPrompt: customPrompt || null,
                 }),
             });
             if (res.ok) {
@@ -411,28 +427,28 @@ export default function AutopilotPage() {
     // Start autopilot for selected account
     const handleStart = async () => {
         if (!selectedAccountId) return;
-        const isDemo = selectedAccountId.startsWith("demo-");
-        // Save first (skip API for demo accounts)
-        if (!isDemo) await handleSave();
+        // Save config first
+        await handleSave();
         const cfg = configs.get(selectedAccountId);
         const account = xAccounts.find(a => a.id === selectedAccountId);
         if (!account) return;
 
-        const configId = cfg?.id || `demo-${selectedAccountId}`;
+        const configId = cfg?.id;
+        if (!configId) return;
 
-        // Create/update config as active
-        const newConfig = cfg ? { ...cfg, isActive: true } : null;
-        if (newConfig) {
-            setConfigs(prev => new Map(prev).set(selectedAccountId, newConfig));
-        }
+        // Persist isActive: true to backend
+        const newConfig = { ...cfg, isActive: true };
+        setConfigs(prev => new Map(prev).set(selectedAccountId, newConfig));
+        fetch("/api/autopilot/config", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ id: configId, isActive: true, xAccountId: selectedAccountId }),
+        }).catch(() => { });
 
-        // Create instance with config summary
+        // Create instance card
         const inst: InstanceState = {
             configId, xAccountId: selectedAccountId,
             username: account.username, isActive: true, paused: false,
-            demoStepIndex: 0, demoProgress: 0,
-            demoFetchedCount: 0, demoHookScore: 0,
-            demoGeneratedTweets: [], demoRunning: true,
             configCategories: [...selectedCategories],
             configTone: tone,
             configTweetCount: parseInt(tweetCount),
@@ -441,19 +457,13 @@ export default function AutopilotPage() {
             configTweetsPerDay: parseInt(tweetsPerDay),
             configLength: length,
             configHashtagCount: parseInt(hashtagCount),
+            lastPostAt: cfg.lastPostAt,
+            todayPostCount: cfg.todayPostCount ?? 0,
         };
         setInstances(prev => new Map(prev).set(selectedAccountId, inst));
 
-        // Add activation log
-        const newLog: AutopilotLog = {
-            id: `demo-${Date.now()}`, configId, action: "activated",
-            details: JSON.stringify({ message: `@${account.username} Autopilot aktifleştirildi` }),
-            tweetUrl: null, createdAt: new Date().toISOString(),
-        };
-        setLogs(prev => [newLog, ...prev]);
-
-        // Run demo pipeline
-        runDemoPipeline(selectedAccountId, account.username, configId);
+        // Reload logs
+        loadLogs();
     };
 
     // Pause a specific instance (keep card visible)
@@ -461,11 +471,20 @@ export default function AutopilotPage() {
         setInstances(prev => {
             const m = new Map(prev);
             const inst = m.get(accountId);
-            if (inst) m.set(accountId, { ...inst, isActive: false, paused: true, demoRunning: false });
+            if (inst) m.set(accountId, { ...inst, isActive: false, paused: true });
             return m;
         });
         const cfg = configs.get(accountId);
-        if (cfg) setConfigs(prev => new Map(prev).set(accountId, { ...cfg, isActive: false }));
+        if (cfg) {
+            setConfigs(prev => new Map(prev).set(accountId, { ...cfg, isActive: false, paused: true }));
+            if (cfg.id) {
+                fetch("/api/autopilot/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: cfg.id, isActive: false, paused: true, xAccountId: accountId }),
+                }).catch(() => { });
+            }
+        }
 
         const account = xAccounts.find(a => a.id === accountId);
         const newLog: AutopilotLog = {
@@ -482,11 +501,20 @@ export default function AutopilotPage() {
         setInstances(prev => {
             const m = new Map(prev);
             const inst = m.get(accountId);
-            if (inst) m.set(accountId, { ...inst, isActive: true, paused: false, demoRunning: true });
+            if (inst) m.set(accountId, { ...inst, isActive: true, paused: false });
             return m;
         });
         const cfg = configs.get(accountId);
-        if (cfg) setConfigs(prev => new Map(prev).set(accountId, { ...cfg, isActive: true }));
+        if (cfg) {
+            setConfigs(prev => new Map(prev).set(accountId, { ...cfg, isActive: true, paused: false }));
+            if (cfg.id) {
+                fetch("/api/autopilot/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: cfg.id, isActive: true, paused: false, xAccountId: accountId }),
+                }).catch(() => { });
+            }
+        }
 
         const account = xAccounts.find(a => a.id === accountId);
         const newLog: AutopilotLog = {
@@ -506,7 +534,17 @@ export default function AutopilotPage() {
             return m;
         });
         const cfg = configs.get(accountId);
-        if (cfg) setConfigs(prev => new Map(prev).set(accountId, { ...cfg, isActive: false }));
+        if (cfg) {
+            setConfigs(prev => new Map(prev).set(accountId, { ...cfg, isActive: false }));
+            // Persist isActive: false to backend
+            if (cfg.id) {
+                fetch("/api/autopilot/config", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ id: cfg.id, isActive: false, xAccountId: accountId }),
+                }).catch(() => { });
+            }
+        }
 
         const account = xAccounts.find(a => a.id === accountId);
         const newLog: AutopilotLog = {
@@ -521,94 +559,7 @@ export default function AutopilotPage() {
     // Confirm dialog state for delete
     const [deleteConfirm, setDeleteConfirm] = useState<{ open: boolean; accountId: string | null }>({ open: false, accountId: null });
 
-    // Demo pipeline runner
-    const runDemoPipeline = async (accountId: string, username: string, configId: string) => {
-        if (!instanceRefs.current.has(accountId)) instanceRefs.current.set(accountId, { hookScore: 0 });
 
-        for (let stepIdx = 0; stepIdx < DEMO_STEPS.length; stepIdx++) {
-            // Check if stopped using functional state check
-            let shouldBreak = false;
-            setInstances(prev => {
-                const inst = prev.get(accountId);
-                if (inst && !inst.demoRunning && stepIdx > 0) shouldBreak = true;
-                return prev;
-            });
-            if (shouldBreak) break;
-
-            const step = DEMO_STEPS[stepIdx];
-            // Update step
-            setInstances(prev => {
-                const m = new Map(prev);
-                const inst = m.get(accountId);
-                if (!inst || !inst.demoRunning) return prev;
-                m.set(accountId, { ...inst, demoStepIndex: stepIdx, demoProgress: 0 });
-                return m;
-            });
-
-            // Simulate progress
-            const progressInterval = setInterval(() => {
-                setInstances(prev => {
-                    const m = new Map(prev);
-                    const inst = m.get(accountId);
-                    if (!inst || !inst.demoRunning) { clearInterval(progressInterval); return prev; }
-                    m.set(accountId, { ...inst, demoProgress: Math.min(inst.demoProgress + 3, 95) });
-                    return m;
-                });
-            }, step.duration / 33);
-
-            await new Promise(r => setTimeout(r, step.duration));
-            clearInterval(progressInterval);
-
-            // Complete step
-            const now = new Date().toISOString();
-            if (step.id === "fetch") {
-                const count = Math.floor(Math.random() * 20) + 15;
-                setInstances(prev => {
-                    const m = new Map(prev); const inst = m.get(accountId);
-                    if (!inst) return prev;
-                    m.set(accountId, { ...inst, demoProgress: 100, demoFetchedCount: count });
-                    return m;
-                });
-                setLogs(prev => [{ id: `f-${Date.now()}`, configId, action: "fetch", details: JSON.stringify({ newsCount: count }), tweetUrl: null, createdAt: now }, ...prev]);
-            } else if (step.id === "summarize") {
-                setInstances(prev => {
-                    const m = new Map(prev); const inst = m.get(accountId);
-                    if (!inst) return prev;
-                    m.set(accountId, { ...inst, demoProgress: 100, demoGeneratedTweets: FAKE_TWEETS });
-                    return m;
-                });
-                setLogs(prev => [{ id: `s-${Date.now()}`, configId, action: "summarize", details: JSON.stringify({ tweetCount: FAKE_TWEETS.length }), tweetUrl: null, createdAt: now }, ...prev]);
-            } else if (step.id === "hook_check") {
-                const score = parseFloat((Math.random() * 2 + 7).toFixed(1));
-                instanceRefs.current.set(accountId, { hookScore: score });
-                setInstances(prev => {
-                    const m = new Map(prev); const inst = m.get(accountId);
-                    if (!inst) return prev;
-                    m.set(accountId, { ...inst, demoProgress: 100, demoHookScore: score });
-                    return m;
-                });
-                setLogs(prev => [{ id: `h-${Date.now()}`, configId, action: "hook_check", details: JSON.stringify({ score, passed: true }), tweetUrl: null, createdAt: now }, ...prev]);
-            } else if (step.id === "post") {
-                setInstances(prev => {
-                    const m = new Map(prev); const inst = m.get(accountId);
-                    if (!inst) return prev;
-                    m.set(accountId, { ...inst, demoProgress: 100 });
-                    return m;
-                });
-                const hookScore = instanceRefs.current.get(accountId)?.hookScore || 0;
-                setLogs(prev => [{ id: `p-${Date.now()}`, configId, action: "post", details: JSON.stringify({ tweetCount: FAKE_TWEETS.length, hookScore, username }), tweetUrl: "https://x.com/demo/status/1234567890", createdAt: now }, ...prev]);
-            }
-            await new Promise(r => setTimeout(r, 400));
-        }
-
-        // Done
-        setInstances(prev => {
-            const m = new Map(prev); const inst = m.get(accountId);
-            if (!inst) return prev;
-            m.set(accountId, { ...inst, demoRunning: false, demoStepIndex: DEMO_STEPS.length - 1 });
-            return m;
-        });
-    };
 
     // Helpers
     const toggleCategory = (catId: string) => setSelectedCategories(prev => prev.includes(catId) ? prev.filter(c => c !== catId) : [...prev, catId]);
@@ -660,9 +611,9 @@ export default function AutopilotPage() {
                                 </p>
                             </div>
                         </div>
-                        {Array.from(instances.values()).filter(i => i.isActive || i.demoRunning).length > 0 && (
+                        {Array.from(instances.values()).filter(i => i.isActive).length > 0 && (
                             <Badge variant="secondary" className="text-[10px]">
-                                {Array.from(instances.values()).filter(i => i.isActive || i.demoRunning).length} aktif
+                                {Array.from(instances.values()).filter(i => i.isActive).length} aktif
                             </Badge>
                         )}
                     </div>
@@ -872,6 +823,39 @@ export default function AutopilotPage() {
                                 </div>
                             )}
                         </div>
+
+                        <Separator className="my-7" />
+
+                        {/* AI Prompt Editor */}
+                        <div>
+                            <button
+                                onClick={() => setShowPromptEditor(!showPromptEditor)}
+                                className="mb-2 flex w-full items-center justify-between text-left"
+                            >
+                                <SectionLabel label="AI Prompt" info="Tweet üretiminde kullanılan AI talimatları." />
+                                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showPromptEditor ? 'rotate-180' : ''}`} />
+                            </button>
+                            {showPromptEditor && (
+                                <div className="space-y-2">
+                                    <textarea
+                                        value={customPrompt || DEFAULT_PROMPT}
+                                        onChange={e => setCustomPrompt(e.target.value === DEFAULT_PROMPT ? "" : e.target.value)}
+                                        className="w-full min-h-[200px] rounded-lg border border-border bg-background p-3 text-xs leading-relaxed outline-none focus:ring-1 focus:ring-primary resize-y"
+                                        rows={10}
+                                    />
+                                    <div className="flex items-center justify-end">
+                                        {customPrompt && (
+                                            <button
+                                                onClick={() => setCustomPrompt("")}
+                                                className="text-[10px] text-orange-400 hover:text-orange-300 transition-colors"
+                                            >
+                                                Varsayılana Dön
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Bottom Actions */}
@@ -886,11 +870,117 @@ export default function AutopilotPage() {
                             Başlat
                         </Button>
 
+                        {/* Manuel Tweet Test Butonu */}
+                        <Button
+                            onClick={async () => {
+                                if (!selectedAccountId) return;
+                                setIsManualTesting(true);
+                                setManualTestResult(null);
+                                try {
+                                    // Önce config'i kaydet
+                                    await handleSave();
+                                    const cfg = configs.get(selectedAccountId);
+                                    if (!cfg?.id) {
+                                        setManualTestResult({ success: false, message: "Config bulunamadı. Önce kaydedin." });
+                                        return;
+                                    }
+                                    // Config'i aktif yap
+                                    const account = xAccounts.find(a => a.id === selectedAccountId);
+                                    fetch("/api/autopilot/config", {
+                                        method: "POST",
+                                        headers: { "Content-Type": "application/json" },
+                                        body: JSON.stringify({ id: cfg.id, isActive: true, xAccountId: selectedAccountId }),
+                                    }).catch(() => { });
+                                    setConfigs(prev => {
+                                        const m = new Map(prev);
+                                        m.set(selectedAccountId, { ...cfg, isActive: true });
+                                        return m;
+                                    });
+
+                                    // Manuel trigger çağır
+                                    const res = await fetch("/api/autopilot/run", {
+                                        method: "POST",
+                                        headers: {
+                                            "Content-Type": "application/json",
+                                            "x-manual-trigger": "true",
+                                        },
+                                        body: JSON.stringify({ configId: cfg.id }),
+                                    });
+                                    const data = await res.json();
+                                    if (data.results && data.results.length > 0) {
+                                        const r = data.results[0];
+                                        if (r.success) {
+                                            setManualTestResult({ success: true, message: `Tweet gönderildi! Hook: ${r.hookScore}/10`, threadUrl: r.threadUrl });
+                                            // Instance card oluştur
+                                            if (account) {
+                                                const inst: InstanceState = {
+                                                    configId: cfg.id, xAccountId: selectedAccountId,
+                                                    username: account.username, isActive: true, paused: false,
+                                                    configCategories: selectedCategories,
+                                                    configTone: tone,
+                                                    configTweetCount: parseInt(tweetCount),
+                                                    configSources: selectedSources,
+                                                    configTimezone: timezone,
+                                                    configTweetsPerDay: parseInt(tweetsPerDay),
+                                                    configLength: length,
+                                                    configHashtagCount: parseInt(hashtagCount),
+                                                    lastPostAt: new Date().toISOString(),
+                                                    todayPostCount: (cfg.todayPostCount ?? 0) + 1,
+                                                };
+                                                setInstances(prev => new Map(prev).set(selectedAccountId, inst));
+                                            }
+                                        } else if (r.skipped) {
+                                            setManualTestResult({ success: false, message: r.message || r.reason || "Atlandı" });
+                                        } else {
+                                            setManualTestResult({ success: false, message: r.error || "Bilinmeyen hata" });
+                                        }
+                                    } else if (data.skipped) {
+                                        setManualTestResult({ success: false, message: data.message || data.reason || "Config bulunamadı veya aktif değil" });
+                                    } else if (data.error) {
+                                        setManualTestResult({ success: false, message: data.error + (data.details ? `: ${data.details}` : "") });
+                                    } else if (data.message) {
+                                        setManualTestResult({ success: false, message: data.message });
+                                    } else {
+                                        setManualTestResult({ success: false, message: "Beklenmeyen yanıt: " + JSON.stringify(data).slice(0, 100) });
+                                    }
+                                    // Logları yenile
+                                    loadLogs();
+                                } catch (err) {
+                                    setManualTestResult({ success: false, message: err instanceof Error ? err.message : "Bağlantı hatası" });
+                                } finally {
+                                    setIsManualTesting(false);
+                                }
+                            }}
+                            disabled={!selectedAccountId || isSaving || isManualTesting || selectedCategories.length === 0}
+                            className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                            size="sm"
+                            variant="outline"
+                        >
+                            {isManualTesting ? (
+                                <><Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> Test ediliyor...</>
+                            ) : (
+                                <><Send className="mr-1.5 h-3.5 w-3.5" /> Manuel Test — Şimdi Tweet At</>
+                            )}
+                        </Button>
+
+                        {/* Manuel test sonucu */}
+                        {manualTestResult && (
+                            <div className={`p-2.5 rounded-md text-xs ${manualTestResult.success ? "bg-green-500/10 border border-green-500/30 text-green-400" : "bg-red-500/10 border border-red-500/30 text-red-400"}`}>
+                                <p>{manualTestResult.message}</p>
+                                {manualTestResult.threadUrl && (
+                                    <a href={manualTestResult.threadUrl} target="_blank" rel="noopener noreferrer"
+                                        className="underline text-primary hover:text-primary/80 mt-1 inline-block">
+                                        → Thread&apos;i görüntüle
+                                    </a>
+                                )}
+                            </div>
+                        )}
+
                     </div>
-                </div>
+                </div >
 
                 {/* Column 2: Active Instances */}
-                <div className="flex h-full min-w-0 flex-1 flex-col border-l border-border bg-card/50">
+                < div className="flex h-full min-w-0 flex-1 flex-col border-l border-border bg-card/50" >
                     <div className="flex h-[52px] shrink-0 flex-col justify-center border-b border-border px-4">
                         <h2 className="text-sm font-semibold flex items-center gap-1.5">
                             <Zap className="h-4 w-4 text-primary" /> Aktif İşlemler
@@ -898,45 +988,52 @@ export default function AutopilotPage() {
                         <p className="text-[10px] text-muted-foreground mt-0.5">Çalışan autopilot görevleri</p>
                     </div>
                     <div className="flex-1 overflow-auto p-3"><div className="grid grid-cols-2 gap-3">
-                        {Array.from(instances.values()).filter(i => i.isActive || i.demoRunning || i.paused || i.demoStepIndex >= 0).map(inst => {
+                        {Array.from(instances.values()).filter(i => i.isActive || i.paused).map(inst => {
                             const toneLabel = toneOptions.find(t => t.id === inst.configTone)?.label || inst.configTone;
                             const categoryLabels = inst.configCategories.map(c => CATEGORIES.find(cat => cat.id === c)?.label || c);
-                            const overallProgress = inst.demoRunning
-                                ? Math.round(((inst.demoStepIndex + inst.demoProgress / 100) / DEMO_STEPS.filter(s => s.id !== "done").length) * 100)
-                                : inst.demoStepIndex === DEMO_STEPS.length - 1 ? 100 : 0;
-                            const isCompleted = inst.demoStepIndex === DEMO_STEPS.length - 1;
-                            const isRunning = inst.demoRunning;
 
                             return (
                                 <div key={inst.xAccountId} className={`relative rounded-xl border overflow-hidden transition-all duration-300 ${inst.paused ? "border-orange-500/50" :
-                                    isRunning ? "border-green-500/40" :
-                                        isCompleted ? "border-green-500/30" :
-                                            "border-border/50"
+                                    inst.isActive ? "border-green-500/40" : "border-border/50"
                                     }`}>
-                                    {/* Flat dark background */}
                                     <div className="absolute inset-0 bg-zinc-900/80" />
 
                                     <div className="relative p-4">
                                         {/* Header */}
                                         <div className="mb-3 flex items-center justify-between">
                                             <div className="flex items-center gap-2.5">
-                                                <div className={`relative flex h-8 w-8 items-center justify-center rounded-full ${isRunning ? "bg-primary/20" : isCompleted ? "bg-green-500/20" : "bg-muted"
-                                                    }`}>
+                                                <div className={`relative flex h-8 w-8 items-center justify-center rounded-full ${inst.isActive ? "bg-green-500/20" : "bg-muted"}`}>
                                                     <span className="text-sm font-bold">{'@'}</span>
-                                                    {isRunning && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 animate-pulse border-2 border-background" />}
-                                                    {isCompleted && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 border-2 border-background flex items-center justify-center"><Check className="h-2 w-2 text-white" /></span>}
+                                                    {inst.isActive && !inst.paused && <span className="absolute -top-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 animate-pulse border-2 border-background" />}
                                                 </div>
                                                 <div>
                                                     <span className="text-sm font-bold">@{inst.username}</span>
+                                                    <p className="text-[10px] text-muted-foreground">
+                                                        {inst.paused ? "⏸ Duraklatıldı" : inst.isActive ? "✅ Aktif — Cron bekliyor" : "○ Pasif"}
+                                                    </p>
                                                 </div>
                                             </div>
                                             {inst.paused ? (
                                                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-500/20 ring-1 ring-orange-500/30">
                                                     <Pause className="h-3.5 w-3.5 text-orange-400" />
                                                 </div>
-                                            ) : isCompleted && (
+                                            ) : inst.isActive && (
                                                 <div className="flex h-7 w-7 items-center justify-center rounded-full bg-green-500/20 ring-1 ring-green-500/30">
-                                                    <Check className="h-4 w-4 text-green-400" />
+                                                    <Zap className="h-3.5 w-3.5 text-green-400" />
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Status info */}
+                                        <div className="mb-3 rounded-lg bg-muted/30 p-2.5">
+                                            <div className="flex items-center justify-between text-[10px]">
+                                                <span className="text-muted-foreground">Bugün</span>
+                                                <span className="font-medium">{inst.todayPostCount ?? 0}/{inst.configTweetsPerDay} tweet</span>
+                                            </div>
+                                            {inst.lastPostAt && (
+                                                <div className="flex items-center justify-between text-[10px] mt-1">
+                                                    <span className="text-muted-foreground">Son post</span>
+                                                    <span className="font-medium">{new Date(inst.lastPostAt).toLocaleTimeString("tr-TR", { hour: "2-digit", minute: "2-digit" })}</span>
                                                 </div>
                                             )}
                                         </div>
@@ -957,9 +1054,6 @@ export default function AutopilotPage() {
                                             <span className="inline-flex items-center rounded-md bg-cyan-500/15 px-2 py-0.5 text-[10px] font-medium text-cyan-400">
                                                 {inst.configSources.length} kaynak
                                             </span>
-                                            <span className="inline-flex items-center rounded-md bg-teal-500/15 px-2 py-0.5 text-[10px] font-medium text-teal-400">
-                                                {inst.configLength === "short" ? "Kısa" : inst.configLength === "medium" ? "Orta" : "Uzun"}
-                                            </span>
                                             <span className="inline-flex items-center rounded-md bg-green-500/15 px-2 py-0.5 text-[10px] font-medium text-green-400">
                                                 {inst.configTweetsPerDay}/gün
                                             </span>
@@ -970,33 +1064,6 @@ export default function AutopilotPage() {
                                                 {TIMEZONE_OPTIONS.find(t => t.id === inst.configTimezone)?.label?.split(" ").pop() || inst.configTimezone}
                                             </span>
                                         </div>
-
-                                        {/* Progress + Status */}
-                                        {(isRunning || isCompleted) && (
-                                            <div className="mb-3">
-                                                <div className="h-1 rounded-full bg-muted/50 overflow-hidden">
-                                                    <div className={`h-full rounded-full transition-all duration-500 ${isCompleted ? "bg-gradient-to-r from-green-500 to-emerald-400" : "bg-gradient-to-r from-primary to-blue-400"
-                                                        }`} style={{ width: `${overallProgress}%` }} />
-                                                </div>
-                                                <div className="mt-1.5 flex items-center justify-between">
-                                                    {isCompleted ? (
-                                                        <span className="text-[10px] text-green-400 flex items-center gap-1">
-                                                            <Check className="h-3 w-3" /> Tamamlandı — {inst.demoFetchedCount} haber, {inst.demoGeneratedTweets.length} tweet, {inst.demoHookScore}/10
-                                                        </span>
-                                                    ) : inst.demoRunning && DEMO_STEPS[inst.demoStepIndex] ? (
-                                                        <span className="text-[10px] text-primary/80 flex items-center gap-1.5">
-                                                            <Loader2 className="h-3 w-3 animate-spin" />
-                                                            {DEMO_STEPS[inst.demoStepIndex].label}
-                                                            {DEMO_STEPS[inst.demoStepIndex].id === "fetch" && inst.demoFetchedCount > 0 && ` (${inst.demoFetchedCount})`}
-                                                            {DEMO_STEPS[inst.demoStepIndex].id === "hook_check" && inst.demoHookScore > 0 && ` ${inst.demoHookScore}/10`}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-[10px] text-muted-foreground">Bekliyor</span>
-                                                    )}
-                                                    <span className={`text-[10px] font-mono font-bold ${isCompleted ? "text-green-400" : "text-primary"}`}>{overallProgress}%</span>
-                                                </div>
-                                            </div>
-                                        )}
 
                                         {/* Action buttons */}
                                         {inst.paused ? (
@@ -1010,7 +1077,7 @@ export default function AutopilotPage() {
                                                     <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Sil
                                                 </Button>
                                             </div>
-                                        ) : (inst.isActive || inst.demoRunning) && (
+                                        ) : inst.isActive && (
                                             <Button size="sm" className="w-full h-8 text-xs bg-orange-500/20 text-orange-400 hover:bg-orange-500/30 hover:text-orange-300 border-0 rounded-lg"
                                                 onClick={() => handleStop(inst.xAccountId)}>
                                                 <Pause className="mr-1.5 h-3.5 w-3.5" /> Durdur
@@ -1021,7 +1088,7 @@ export default function AutopilotPage() {
                             );
                         })}
 
-                    </div>{Array.from(instances.values()).filter(i => i.isActive || i.demoRunning || i.paused || i.demoStepIndex >= 0).length === 0 && (
+                    </div>{Array.from(instances.values()).filter(i => i.isActive || i.paused).length === 0 && (
                         <div className="flex flex-col items-center justify-center py-12 text-center">
                             <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
                                 <Zap className="h-6 w-6 text-muted-foreground/40" />
@@ -1031,10 +1098,10 @@ export default function AutopilotPage() {
                         </div>
                     )}
                     </div>
-                </div>
+                </div >
 
                 {/* Column 3: Activity Logs */}
-                <div className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-card">
+                < div className="flex h-full w-72 shrink-0 flex-col border-l border-border bg-card" >
                     <div className="flex h-[52px] shrink-0 items-center justify-between border-b border-border px-4">
                         <div>
                             <h2 className="text-sm font-semibold">Aktivite Logları</h2>
@@ -1080,13 +1147,14 @@ export default function AutopilotPage() {
                             </div>
                         )}
                     </div>
-                </div>
-            </div>
+                </div >
+            </div >
 
             {/* Delete Confirmation Modal */}
-            <ConfirmDialog
+            < ConfirmDialog
                 open={deleteConfirm.open}
-                onOpenChange={(open) => setDeleteConfirm({ open, accountId: open ? deleteConfirm.accountId : null })}
+                onOpenChange={(open) => setDeleteConfirm({ open, accountId: open ? deleteConfirm.accountId : null })
+                }
                 title="İşlemi Sil"
                 description="Bu autopilot işlemini silmek istediğinize emin misiniz? Bu işlem geri alınamaz."
                 confirmLabel="Sil"

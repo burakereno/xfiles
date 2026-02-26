@@ -72,6 +72,9 @@ export async function POST(request: NextRequest) {
             ctaText,
             xAccountId,
             isActive,
+            hashtagCount,
+            customPrompt,
+            paused,
         } = body;
 
         if (!xAccountId) {
@@ -79,6 +82,23 @@ export async function POST(request: NextRequest) {
                 { error: "xAccountId is required" },
                 { status: 400 }
             );
+        }
+
+        // Fast path: isActive/paused-only update (Stop/Resume buttons)
+        if (id && (isActive !== undefined || paused !== undefined) && !categories) {
+            const config = await prisma.autopilotConfig.update({
+                where: { id },
+                data: {
+                    ...(isActive !== undefined ? { isActive } : {}),
+                    ...(paused !== undefined ? { paused } : {}),
+                },
+                include: {
+                    xAccount: {
+                        select: { id: true, username: true, displayName: true, profileImage: true },
+                    },
+                },
+            });
+            return NextResponse.json({ config });
         }
 
         if (!categories) {
@@ -107,6 +127,8 @@ export async function POST(request: NextRequest) {
             preferredHours: preferredHours || null,
             ctaEnabled: ctaEnabled !== undefined ? ctaEnabled : true,
             ctaText: ctaText || null,
+            hashtagCount: Math.min(Math.max(hashtagCount ?? 2, 0), 5),
+            customPrompt: customPrompt !== undefined ? (customPrompt || null) : undefined,
             xAccountId,
             ...(isActive !== undefined ? { isActive } : {}),
         };

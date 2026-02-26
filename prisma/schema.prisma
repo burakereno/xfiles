@@ -67,6 +67,7 @@ model AutopilotConfig {
   id             String    @id @default(cuid())
   name           String    @default("My Autopilot")
   isActive       Boolean   @default(false)
+  paused         Boolean   @default(false)
 
   // Tweet settings
   categories     String    // Comma-separated: "teknoloji,ekonomi"
@@ -75,6 +76,8 @@ model AutopilotConfig {
   tone           String    @default("professional")
   tweetCount     Int       @default(5)           // Tweets per thread (5-7 optimal)
   charLimit      Int       @default(260)
+  hashtagCount   Int       @default(2)           // 0, 2, or 3
+  customPrompt   String?   @db.Text              // User-editable AI prompt
 
   // CTA
   ctaEnabled     Boolean   @default(true)
@@ -96,15 +99,17 @@ model AutopilotConfig {
 
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  logs           AutopilotLog[]
 }
 
 model AutopilotLog {
-  id          String   @id @default(cuid())
+  id          String          @id @default(cuid())
   configId    String
-  action      String   // "fetch" | "summarize" | "hook_check" | "post" | "error" | "skipped"
-  details     String   // JSON details
+  config      AutopilotConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  action      String          // "fetch" | "summarize" | "hook_check" | "post" | "error" | "skipped"
+  details     String          // JSON details
   tweetUrl    String?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime        @default(now())
 }
 
 // AI Provider Configuration (multi-provider support)
